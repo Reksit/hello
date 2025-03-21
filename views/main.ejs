@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= title %> | Student Registration System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Arial', sans-serif;
+            padding-bottom: 50px;
+        }
+        .sidebar {
+            background-color: #343a40;
+            color: white;
+            height: 100vh;
+            position: fixed;
+            padding-top: 20px;
+        }
+        .sidebar .nav-link {
+            color: rgba(255, 255, 255, 0.75);
+            padding: 15px 20px;
+            border-radius: 0;
+        }
+        .sidebar .nav-link:hover {
+            color: white;
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+        .sidebar .nav-link.active {
+            color: white;
+            background-color: #007bff;
+        }
+        .content {
+            margin-left: 250px;
+            padding: 20px;
+        }
+        .content-header {
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .card {
+            margin-bottom: 20px;
+            border: none;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.05);
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        .user-info {
+            padding: 15px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 100%;
+                height: auto;
+                position: relative;
+            }
+            .content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Sidebar -->
+            <div class="col-md-3 col-lg-2 d-md-block sidebar collapse">
+                <div class="user-info">
+                    <h5><%= user.name || user.username %></h5>
+                    <small><%= userType %></small>
+                </div>
+                <ul class="nav flex-column">
+                    <% if (userType === 'staff') { %>
+                        <li class="nav-item">
+                            <a class="nav-link <%= active === 'dashboard' ? 'active' : '' %>" href="/staff/dashboard">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link <%= active === 'registration' ? 'active' : '' %>" href="/staff/register-student">
+                                Register Student
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link <%= active === 'teams' ? 'active' : '' %>" href="/staff/view-teams">
+                                View Teams
+                            </a>
+                        </li>
+                    <% } else if (userType === 'principal') { %>
+                        <li class="nav-item">
+                            <a class="nav-link <%= active === 'dashboard' ? 'active' : '' %>" href="/principal/dashboard">
+                                Dashboard
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link <%= active === 'create-team' ? 'active' : '' %>" href="/principal/create-team">
+                                Create Team Leader
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link <%= active === 'teams' ? 'active' : '' %>" href="/principal/view-teams">
+                                Manage Teams
+                            </a>
+                        </li>
+                    <% } %>
+                    <li class="nav-item mt-5">
+                        <a class="nav-link" href="/logout">
+                            Logout
+                        </a>
+                    </li>
+                </ul>
+            </div>
+            
+            <!-- Main content -->
+            <main class="col-md-9 ms-sm-auto col-lg-10 px-md-4 content">
+                <div class="content-header d-flex justify-content-between align-items-center">
+                    <h2><%= title %></h2>
+                </div>
+                
+                <% if (message) { %>
+                    <div class="alert alert-<%= messageType %>" role="alert">
+                        <%= message %>
+                    </div>
+                <% } %>
+
+                <% if (active === 'dashboard' && userType === 'staff') { %>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Students Registered</h5>
+                                    <h2 class="display-4"><%= counts.students || 0 %></h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Teams</h5>
+                                    <h2 class="display-4"><%= counts.teams || 0 %></h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5>Recently Registered Students</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Age</th>
+                                            <th>Gender</th>
+                                            <th>Team Leader</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (recentStudents && recentStudents.length > 0) { %>
+                                            <% recentStudents.forEach(student => { %>
+                                                <tr>
+                                                    <td><%= student.name %></td>
+                                                    <td><%= student.age %></td>
+                                                    <td><%= student.gender %></td>
+                                                    <td><%= student.teamLeader ? student.teamLeader.name : 'Not Assigned' %></td>
+                                                </tr>
+                                            <% }) %>
+                                        <% } else { %>
+                                            <tr>
+                                                <td colspan="4" class="text-center">No students registered yet</td>
+                                            </tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                <% } else if (active === 'dashboard' && userType === 'principal') { %>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Total Team Leaders</h5>
+                                    <h2 class="display-4"><%= counts.teamLeaders || 0 %></h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Total Students</h5>
+                                    <h2 class="display-4"><%= counts.students || 0 %></h2>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-body">
+                                    <h5 class="card-title">Total Staff</h5>
+                                    <h2 class="display-4"><%= counts.staff || 0 %></h2>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card mt-4">
+                        <div class="card-header">
+                            <h5>Team Leaders Overview</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table">
+                                    <thead>
+                                        <tr>
+                                            <th>Name</th>
+                                            <th>Age Group</th>
+                                            <th>Gender</th>
+                                            <th>Students</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <% if (teamLeaders && teamLeaders.length > 0) { %>
+                                            <% teamLeaders.forEach(leader => { %>
+                                                <tr>
+                                                    <td><%= leader.name %></td>
+                                                    <td><%= leader.ageUndertaken %></td>
+                                                    <td><%= leader.gender %></td>
+                                                    <td><%= leader.studentCount %></td>
+                                                    <td>
+                                                        <a href="/principal/view-team/<%= leader._id %>" class="btn btn-sm btn-primary">View</a>
+                                                    </td>
+                                                </tr>
+                                            <% }) %>
+                                        <% } else { %>
+                                            <tr>
+                                                <td colspan="5" class="text-center">No team leaders created yet</td>
+                                            </tr>
+                                        <% } %>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                <% } else if (active === 'registration') { %>
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Register New Student</h5>
+                        </div>
+                        <div class="card-body">
+                            <form action="/staff/register-student" method="POST">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="studentName" class="form-label">Full Name</label>
+                                        <input type="text" class="form-control" id="studentName" name="name" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="studentAge" class="form-label">Age</label>
+                                        <input type="number" class="form-control" id="studentAge" name="age" min="3" max="18" required>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="studentGender" class="form-label">Gender</label>
+                                        <select class="form-select" id="studentGender" name="gender" required>
+                                            <option value="">Select Gender</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="studentPhone" class="form-label">Phone Number</label>
+                                        <input type="tel" class="form-control" id="studentPhone" name="phone" required>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="studentAddress" class="form-label">Address</label>
+                                    <textarea class="form-control" id="studentAddress" name="address" rows="3" required></textarea>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-primary">Register Student</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                <% } else if (active === 'teams' && userType === 'staff') { %>
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>All Teams</h5>
+                        </div>
+                        <div class="card-body">
+                            <% if (teams && teams.length > 0) { %>
+                                <div class="accordion" id="teamsAccordion">
+                                    <% teams.forEach((team, index) => { %>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header" id="heading<%= index %>">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse<%= index %>" aria-expanded="false" aria-controls="collapse<%= index %>">
+                                                    <div class="d-flex justify-content-between w-100 me-3">
+                                                        <span><strong><%= team.name %></strong> - Age: <%= team.ageUndertaken %>, Gender: <%= team.gender %></span>
+                                                        <span class="badge bg-primary"><%= team.students.length %> Students</span>
+                                                    </div>
+                                                </button>
+                                            </h2>
+                                            <div id="collapse<%= index %>" class="accordion-collapse collapse" aria-labelledby="heading<%= index %>" data-bs-parent="#teamsAccordion">
+                                                <div class="accordion-body">
+                                                    <div class="table-responsive">
+                                                        <table class="table table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Name</th>
+                                                                    <th>Age</th>
+                                                                    <th>Gender</th>
+                                                                    <th>Phone</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <% if (team.students.length > 0) { %>
+                                                                    <% team.students.forEach(student => { %>
+                                                                        <tr>
+                                                                            <td><%= student.name %></td>
+                                                                            <td><%= student.age %></td>
+                                                                            <td><%= student.gender %></td>
+                                                                            <td><%= student.phone %></td>
+                                                                        </tr>
+                                                                    <% }) %>
+                                                                <% } else { %>
+                                                                    <tr>
+                                                                        <td colspan="4" class="text-center">No students in this team</td>
+                                                                    </tr>
+                                                                <% } %>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                            <% } else { %>
+                                <div class="alert alert-info">No teams available. The principal needs to create team leaders first.</div>
+                            <% } %>
+                        </div>
+                    </div>
+                <% } else if (active === 'create-team' && userType === 'principal') { %>
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Create New Team Leader</h5>
+                        </div>
+                        <div class="card-body">
+                            <form action="/principal/create-team" method="POST">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="teamLeaderName" class="form-label">Full Name</label>
+                                        <input type="text" class="form-control" id="teamLeaderName" name="name" required>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="teamLeaderGender" class="form-label">Gender</label>
+                                        <select class="form-select" id="teamLeaderGender" name="gender" required>
+                                            <option value="">Select Gender</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                            <option value="Other">Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="ageUndertaken" class="form-label">Age Group Undertaken</label>
+                                    <select class="form-select" id="ageUndertaken" name="ageUndertaken" required>
+                                        <option value="">Select Age Group</option>
+                                        <% for(let i = 3; i <= 18; i++) { %>
+                                            <option value="<%= i %>"><%= i %> years</option>
+                                        <% } %>
+                                    </select>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button type="submit" class="btn btn-success">Create Team Leader</button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                <% } else if (active === 'teams' && userType === 'principal') { %>
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>Manage Teams</h5>
+                        </div>
+                        <div class="card-body">
+                            <% if (teams && teams.length > 0) { %>
+                                <div class="accordion" id="teamsAccordion">
+                                    <% teams.forEach((team, index) => { %>
+                                        <div class="accordion-item">
+                                            <h2 class="accordion-header" id="heading<%= index %>">
+                                                <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse<%= index %>" aria-expanded="false" aria-controls="collapse<%= index %>">
+                                                    <div class="d-flex justify-content-between w-100 me-3">
+                                                        <span><strong><%= team.name %></strong> - Age: <%= team.ageUndertaken %>, Gender: <%= team.gender %></span>
+                                                        <span class="badge bg-primary"><%= team.students.length %> Students</span>
+                                                    </div>
+                                                </button>
+                                            </h2>
+                                            <div id="collapse<%= index %>" class="accordion-collapse collapse" aria-labelledby="heading<%= index %>" data-bs-parent="#teamsAccordion">
+                                                <div class="accordion-body">
+                                                    <div class="mb-3">
+                                                        <a href="/principal/edit-team/<%= team._id %>" class="btn btn-sm btn-primary">Edit Team Leader</a>
+                                                    </div>
+                                                    <div class="table-responsive">
+                                                        <table class="table table-sm">
+                                                            <thead>
+                                                                <tr>
+                                                                    <th>Name</th>
+                                                                    <th>Age</th>
+                                                                    <th>Gender</th>
+                                                                    <th>Actions</th>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <% if (team.students.length > 0) { %>
+                                                                    <% team.students.forEach(student => { %>
+                                                                        <tr>
+                                                                            <td><%= student.name %></td>
+                                                                            <td><%= student.age %></td>
+                                                                            <td><%= student.gender %></td>
+                                                                            <td>
+                                                                                <button class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#reassignModal<%= student._id %>">Reassign</button>
+                                                                                
+                                                                                <!-- Reassign Modal -->
+                                                                                <div class="modal fade" id="reassignModal<%= student._id %>" tabindex="-1" aria-hidden="true">
+                                                                                    <div class="modal-dialog">
+                                                                                        <div class="modal-content">
+                                                                                            <div class="modal-header">
+                                                                                                <h5 class="modal-title">Reassign <%= student.name %></h5>
+                                                                                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                                                            </div>
+                                                                                            <div class="modal-body">
+                                                                                                <form action="/principal/reassign-student" method="POST">
+                                                                                                    <input type="hidden" name="studentId" value="<%= student._id %>">
+                                                                                                    <div class="mb-3">
+                                                                                                        <label class="form-label">Select New Team Leader</label>
+                                                                                                        <select class="form-select" name="newTeamId" required>
+                                                                                                            <% teams.forEach(t => { %>
+                                                                                                                <% if (t._id.toString() !== team._id.toString() && t.ageUndertaken == student.age && t.gender === student.gender) { %>
+                                                                                                                    <option value="<%= t._id %>"><%= t.name %> - <%= t.students.length %> students</option>
+                                                                                                                <% } %>
+                                                                                                            <% }) %>
+                                                                                                        </select>
+                                                                                                    </div>
+                                                                                                    <div class="d-grid">
+                                                                                                        <button type="submit" class="btn btn-primary">Reassign</button>
+                                                                                                    </div>
+                                                                                                </form>
+                                                                                            </div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </td>
+                                                                        </tr>
+                                                                    <% }) %>
+                                                                <% } else { %>
+                                                                    <tr>
+                                                                        <td colspan="4" class="text-center">No students in this team</td>
+                                                                    </tr>
+                                                                <% } %>
+                                                            </tbody>
+                                                        </table>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    <% }) %>
+                                </div>
+                            <% } else { %>
+                                <div class="alert alert-info">No teams created yet. Please create team leaders first.</div>
+                            <% } %>
+                        </div>
+                    </div>
+                <% } %>
+            </main>
+        </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Enable tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl)
+        })
+    </script>
+</body>
+</html>
