@@ -4,16 +4,17 @@ const bcrypt = require('bcrypt');
 const session = require('express-session');
 const app = express();
 const port = process.env.PORT || 5000;
+const ExcelJS = require('exceljs');
 
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/student_registration')
-    .then(() => {
-        console.log('Connected to MongoDB');
-    })
-    .catch(err => {
-        console.error('MongoDB connection error:', err);
+// MongoDB Connection
+const uri = "mongodb+srv://reksitrajan01:8n4SHiaJfCZRrimg@cluster0.mperr.mongodb.net/climate_monitor?retryWrites=true&w=majority";
+mongoose.connect(uri)
+    .then(() => console.log('✅ MongoDB Connected Successfully!'))
+    .catch((err) => {
+        console.error('❌ MongoDB connection error:', err);
+        process.exit(1);
     });
-
 
 // Define Schemas
 const staffSchema = new mongoose.Schema({
@@ -411,6 +412,130 @@ app.post('/principal/reassign-student', isPrincipalAuthenticated, async (req, re
     } catch (error) {
         console.error('Reassign student error:', error);
         res.redirect('/principal/view-teams?message=Error+reassigning+student&messageType=danger');
+    }
+});
+
+// Export students data route
+app.get('/export-students', isPrincipalAuthenticated, async (req, res) => {
+    try {
+        // Fetch all students with their team leader info
+        const students = await Student.find({}).populate('teamLeader');
+        
+        // Create a new Excel workbook and worksheet
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Students');
+        
+        // Define columns
+        worksheet.columns = [
+            { header: 'Name', key: 'name', width: 30 },
+            { header: 'Age', key: 'age', width: 10 },
+            { header: 'Gender', key: 'gender', width: 15 },
+            { header: 'Phone', key: 'phone', width: 20 },
+            { header: 'Address', key: 'address', width: 40 },
+            { header: 'Team Leader', key: 'teamLeader', width: 30 }
+        ];
+        
+        // Add data rows
+        students.forEach(student => {
+            worksheet.addRow({
+                name: student.name,
+                age: student.age,
+                gender: student.gender,
+                phone: student.phone,
+                address: student.address,
+                teamLeader: student.teamLeader ? student.teamLeader.name : 'Not Assigned'
+            });
+        });
+        
+        // Set response headers
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=students.xlsx');
+        
+        // Write to response
+        await workbook.xlsx.write(res);
+        res.end();
+        
+    } catch (error) {
+        console.error('Error exporting students data:', error);
+        res.redirect('/principal/dashboard?message=Failed+to+export+students+data&messageType=danger');
+    }
+});
+
+// Export teams data route
+app.get('/export-teams', isPrincipalAuthenticated, async (req, res) => {
+    try {
+        // Fetch all team leaders with their students
+        const teams = await TeamLeader.find({}).populate('students').sort({ ageUndertaken: 1 });
+        
+        // Create a new Excel workbook and worksheet
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Teams');
+        
+        // Define columns for teams overview
+        worksheet.columns = [
+            { header: 'Team Leader Name', key: 'name', width: 30 },
+            { header: 'Age Group', key: 'ageUndertaken', width: 15 },
+            { header: 'Gender', key: 'gender', width: 15 },
+            { header: 'Total Students', key: 'studentCount', width: 20 }
+        ];
+        
+        // Add team data rows
+        teams.forEach(team => {
+            worksheet.addRow({
+                name: team.name,
+                ageUndertaken: team.ageUndertaken,
+                gender: team.gender,
+                studentCount: team.students.length
+            });
+        });
+        
+        // Add separator row
+        worksheet.addRow({});
+        worksheet.addRow({ name: 'Detailed Team Information' });
+        worksheet.addRow({});
+        
+        // For each team, add detailed student information
+        teams.forEach(team => {
+            // Add team header
+            worksheet.addRow({ name: `Team: ${team.name} - Age: ${team.ageUndertaken} - Gender: ${team.gender}` });
+            
+            // Add student headers if the team has students
+            if (team.students.length > 0) {
+                worksheet.addRow({
+                    name: 'Student Name',
+                    ageUndertaken: 'Age',
+                    gender: 'Gender',
+                    studentCount: 'Phone'
+                });
+                
+                // Add student rows
+                team.students.forEach(student => {
+                    worksheet.addRow({
+                        name: student.name,
+                        ageUndertaken: student.age,
+                        gender: student.gender,
+                        studentCount: student.phone
+                    });
+                });
+            } else {
+                worksheet.addRow({ name: 'No students in this team' });
+            }
+            
+            // Add separator
+            worksheet.addRow({});
+        });
+        
+        // Set response headers
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=teams.xlsx');
+        
+        // Write to response
+        await workbook.xlsx.write(res);
+        res.end();
+        
+    } catch (error) {
+        console.error('Error exporting teams data:', error);
+        res.redirect('/principal/dashboard?message=Failed+to+export+teams+data&messageType=danger');
     }
 });
 
