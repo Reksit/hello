@@ -1,56 +1,45 @@
+// Firebase setup and configuration
 const express = require('express');
-const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
 const session = require('express-session');
+const bcrypt = require('bcrypt');
+const ExcelJS = require('exceljs');
 const app = express();
 const port = process.env.PORT || 5000;
-const ExcelJS = require('exceljs');
 
-// Connect to MongoDB
-// MongoDB Connection
-const uri = "mongodb+srv://reksitrajan01:8n4SHiaJfCZRrimg@cluster0.mperr.mongodb.net/climate_monitor?retryWrites=true&w=majority";
-mongoose.connect(uri)
-    .then(() => console.log('✅ MongoDB Connected Successfully!'))
-    .catch((err) => {
-        console.error('❌ MongoDB connection error:', err);
-        process.exit(1);
-    });
+// Firebase setup
+const { initializeApp } = require('firebase/app');
+const { 
+  getFirestore, 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  addDoc, 
+  updateDoc, 
+  query, 
+  where, 
+  orderBy, 
+  limit,
+  arrayUnion,
+  arrayRemove,
+  serverTimestamp 
+} = require('firebase/firestore'); // Changed from firebase/database to firebase/firestore
 
-// Define Schemas
-const staffSchema = new mongoose.Schema({
-    name: String,
-    username: { type: String, unique: true },
-    password: String
-});
+// Your Firebase configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyAvhjpYIL2tHwr5NWddwp-uslLQQPYSHp0",
+    authDomain: "register2-2b2f1.firebaseapp.com",
+    projectId: "register2-2b2f1",
+    storageBucket: "register2-2b2f1.firebasestorage.app",
+    messagingSenderId: "204113627122",
+    appId: "1:204113627122:web:7dbdaa7290971cd8494d6b",
+    measurementId: "G-YDV7T8Y7SE"
+  };
 
-const principalSchema = new mongoose.Schema({
-    username: { type: String, unique: true },
-    password: String
-});
-
-const teamLeaderSchema = new mongoose.Schema({
-    name: String,
-    gender: String,
-    ageUndertaken: Number,
-    students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Student' }]
-});
-
-const studentSchema = new mongoose.Schema({
-    name: String,
-    age: Number,
-    gender: String,
-    phone: String,
-    address: String,
-    teamLeader: { type: mongoose.Schema.Types.ObjectId, ref: 'TeamLeader' },
-    registeredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Staff' },
-    registeredDate: { type: Date, default: Date.now }
-});
-
-// Create models
-const Staff = mongoose.model('Staff', staffSchema);
-const Principal = mongoose.model('Principal', principalSchema);
-const TeamLeader = mongoose.model('TeamLeader', teamLeaderSchema);
-const Student = mongoose.model('Student', studentSchema);
+// Initialize Firebase
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
 
 // Middleware
 app.use(express.json());
@@ -81,10 +70,13 @@ const isPrincipalAuthenticated = (req, res, next) => {
 // Initialize default principal account
 async function initializeDefaultPrincipal() {
     try {
-        const principalCount = await Principal.countDocuments({});
-        if (principalCount === 0) {
+        // Check if principal account exists
+        const principalsRef = collection(db, 'principals');
+        const principalsSnapshot = await getDocs(principalsRef);
+        
+        if (principalsSnapshot.empty) {
             const hashedPassword = await bcrypt.hash('admin123', 10);
-            await Principal.create({
+            await addDoc(principalsRef, {
                 username: 'admin',
                 password: hashedPassword
             });
@@ -107,20 +99,25 @@ app.get('/', (req, res) => {
 app.post('/staff/signup', async (req, res) => {
     try {
         const { name, username, password } = req.body;
-        const existingStaff = await Staff.findOne({ username });
         
-        if (existingStaff) {
+        // Check if username already exists
+        const staffRef = collection(db, 'staff');
+        const q = query(staffRef, where('username', '==', username));
+        const staffSnapshot = await getDocs(q);
+        
+        if (!staffSnapshot.empty) {
             return res.redirect('/?message=Username+already+exists&messageType=danger');
         }
         
         const hashedPassword = await bcrypt.hash(password, 10);
-        const newStaff = new Staff({
+        
+        // Add new staff
+        const newStaffRef = await addDoc(staffRef, {
             name,
             username,
             password: hashedPassword
         });
         
-        await newStaff.save();
         res.redirect('/?message=Account+created+successfully.+Please+login&messageType=success');
     } catch (error) {
         console.error('Staff signup error:', error);
@@ -131,18 +128,27 @@ app.post('/staff/signup', async (req, res) => {
 app.post('/staff/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const staff = await Staff.findOne({ username });
         
-        if (!staff) {
+        // Find staff with username
+        const staffRef = collection(db, 'staff');
+        const q = query(staffRef, where('username', '==', username));
+        const staffSnapshot = await getDocs(q);
+        
+        if (staffSnapshot.empty) {
             return res.redirect('/?message=Invalid+username+or+password&messageType=danger');
         }
         
-        const isPasswordValid = await bcrypt.compare(password, staff.password);
+        // Get first matching staff
+        const staffDoc = staffSnapshot.docs[0];
+        const staffData = staffDoc.data();
+        
+        // Verify password
+        const isPasswordValid = await bcrypt.compare(password, staffData.password);
         if (!isPasswordValid) {
             return res.redirect('/?message=Invalid+username+or+password&messageType=danger');
         }
         
-        req.session.userId = staff._id;
+        req.session.userId = staffDoc.id;
         req.session.userType = 'staff';
         res.redirect('/staff/dashboard');
     } catch (error) {
@@ -153,23 +159,63 @@ app.post('/staff/login', async (req, res) => {
 
 app.get('/staff/dashboard', isStaffAuthenticated, async (req, res) => {
     try {
-        const staff = await Staff.findById(req.session.userId);
-        const counts = {
-            students: await Student.countDocuments({}),
-            teams: await TeamLeader.countDocuments({})
-        };
+        // Get staff data
+        const staffRef = doc(db, 'staff', req.session.userId);
+        const staffDoc = await getDoc(staffRef);
         
-        const recentStudents = await Student.find({})
-            .sort({ registeredDate: -1 })
-            .limit(5)
-            .populate('teamLeader');
+        if (!staffDoc.exists()) {
+            throw new Error('Staff not found');
+        }
+        
+        const staff = staffDoc.data();
+        
+        // Count students and teams
+        const studentsRef = collection(db, 'students');
+        const studentsSnapshot = await getDocs(studentsRef);
+        const studentsCount = studentsSnapshot.size;
+        
+        const teamsRef = collection(db, 'teamLeaders');
+        const teamsSnapshot = await getDocs(teamsRef);
+        const teamsCount = teamsSnapshot.size;
+        
+        // Get recent students
+        const recentStudentsQ = query(
+            studentsRef,
+            orderBy('registeredDate', 'desc'),
+            limit(5)
+        );
+        const recentStudentsSnapshot = await getDocs(recentStudentsQ);
+        
+        // Format recent students with team leader data
+        const recentStudents = [];
+        for (const docSnap of recentStudentsSnapshot.docs) {
+            const studentData = docSnap.data();
+            let teamLeaderData = null;
+            
+            if (studentData.teamLeader) {
+                const teamLeaderRef = doc(db, 'teamLeaders', studentData.teamLeader);
+                const teamLeaderDoc = await getDoc(teamLeaderRef);
+                if (teamLeaderDoc.exists()) {
+                    teamLeaderData = teamLeaderDoc.data();
+                }
+            }
+            
+            recentStudents.push({
+                id: docSnap.id,
+                ...studentData,
+                teamLeader: teamLeaderData
+            });
+        }
         
         res.render('main', {
             title: 'Staff Dashboard',
-            user: staff,
+            user: { ...staff, id: req.session.userId },
             userType: 'staff',
             active: 'dashboard',
-            counts,
+            counts: {
+                students: studentsCount,
+                teams: teamsCount
+            },
             recentStudents,
             message: req.query.message || '',
             messageType: req.query.messageType || 'info'
@@ -182,11 +228,18 @@ app.get('/staff/dashboard', isStaffAuthenticated, async (req, res) => {
 
 app.get('/staff/register-student', isStaffAuthenticated, async (req, res) => {
     try {
-        const staff = await Staff.findById(req.session.userId);
+        const staffRef = doc(db, 'staff', req.session.userId);
+        const staffDoc = await getDoc(staffRef);
+        
+        if (!staffDoc.exists()) {
+            throw new Error('Staff not found');
+        }
+        
+        const staff = staffDoc.data();
         
         res.render('main', {
             title: 'Register Student',
-            user: staff,
+            user: { ...staff, id: req.session.userId },
             userType: 'staff',
             active: 'registration',
             message: req.query.message || '',
@@ -201,42 +254,58 @@ app.get('/staff/register-student', isStaffAuthenticated, async (req, res) => {
 app.post('/staff/register-student', isStaffAuthenticated, async (req, res) => {
     try {
         const { name, age, gender, phone, address } = req.body;
+        const ageNum = parseInt(age);
         
         // Find suitable team leader based on age and gender
-        const eligibleTeamLeaders = await TeamLeader.find({
-            ageUndertaken: parseInt(age),
-            gender: gender
-        }).populate({
-            path: 'students',
-            select: '_id'
-        });
+        const teamLeadersRef = collection(db, 'teamLeaders');
+        const q = query(
+            teamLeadersRef,
+            where('ageUndertaken', '==', ageNum),
+            where('gender', '==', gender)
+        );
+        const teamLeadersSnapshot = await getDocs(q);
         
-        if (eligibleTeamLeaders.length === 0) {
+        if (teamLeadersSnapshot.empty) {
             return res.redirect('/staff/register-student?message=No+suitable+team+leader+found+for+this+student&messageType=warning');
         }
         
+        // Get all team leaders with student counts
+        const teamLeaders = [];
+        for (const docSnap of teamLeadersSnapshot.docs) {
+            const teamLeaderData = docSnap.data();
+            const studentCount = teamLeaderData.students ? teamLeaderData.students.length : 0;
+            
+            teamLeaders.push({
+                id: docSnap.id,
+                ...teamLeaderData,
+                studentCount
+            });
+        }
+        
         // Sort team leaders by number of students (ascending)
-        eligibleTeamLeaders.sort((a, b) => a.students.length - b.students.length);
+        teamLeaders.sort((a, b) => a.studentCount - b.studentCount);
         
         // Assign to team leader with fewest students
-        const assignedTeamLeader = eligibleTeamLeaders[0];
+        const assignedTeamLeader = teamLeaders[0];
         
         // Create new student
-        const newStudent = new Student({
+        const studentsRef = collection(db, 'students');
+        const newStudentRef = await addDoc(studentsRef, {
             name,
-            age: parseInt(age),
+            age: ageNum,
             gender,
             phone,
             address,
-            teamLeader: assignedTeamLeader._id,
-            registeredBy: req.session.userId
+            teamLeader: assignedTeamLeader.id,
+            registeredBy: req.session.userId,
+            registeredDate: serverTimestamp()
         });
         
-        await newStudent.save();
-        
         // Update team leader's student list
-        assignedTeamLeader.students.push(newStudent._id);
-        await assignedTeamLeader.save();
+        const teamLeaderRef = doc(db, 'teamLeaders', assignedTeamLeader.id);
+        await updateDoc(teamLeaderRef, {
+            students: arrayUnion(newStudentRef.id)
+        });
         
         res.redirect('/staff/register-student?message=Student+registered+successfully&messageType=success');
     } catch (error) {
@@ -247,12 +316,50 @@ app.post('/staff/register-student', isStaffAuthenticated, async (req, res) => {
 
 app.get('/staff/view-teams', isStaffAuthenticated, async (req, res) => {
     try {
-        const staff = await Staff.findById(req.session.userId);
-        const teams = await TeamLeader.find({}).populate('students');
+        const staffRef = doc(db, 'staff', req.session.userId);
+        const staffDoc = await getDoc(staffRef);
+        
+        if (!staffDoc.exists()) {
+            throw new Error('Staff not found');
+        }
+        
+        const staff = staffDoc.data();
+        
+        // Get all team leaders
+        const teamLeadersRef = collection(db, 'teamLeaders');
+        const teamLeadersSnapshot = await getDocs(teamLeadersRef);
+        
+        // Format teams with student data
+        const teams = [];
+        for (const docSnap of teamLeadersSnapshot.docs) {
+            const teamLeaderData = docSnap.data();
+            const studentList = [];
+            
+            // Get students for this team
+            if (teamLeaderData.students && teamLeaderData.students.length > 0) {
+                for (const studentId of teamLeaderData.students) {
+                    const studentRef = doc(db, 'students', studentId);
+                    const studentDoc = await getDoc(studentRef);
+                    
+                    if (studentDoc.exists()) {
+                        studentList.push({
+                            id: studentDoc.id,
+                            ...studentDoc.data()
+                        });
+                    }
+                }
+            }
+            
+            teams.push({
+                id: docSnap.id,
+                ...teamLeaderData,
+                students: studentList
+            });
+        }
         
         res.render('main', {
             title: 'View Teams',
-            user: staff,
+            user: { ...staff, id: req.session.userId },
             userType: 'staff',
             active: 'teams',
             teams,
@@ -269,18 +376,27 @@ app.get('/staff/view-teams', isStaffAuthenticated, async (req, res) => {
 app.post('/principal/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const principal = await Principal.findOne({ username });
         
-        if (!principal) {
+        // Find principal with username
+        const principalsRef = collection(db, 'principals');
+        const q = query(principalsRef, where('username', '==', username));
+        const principalsSnapshot = await getDocs(q);
+        
+        if (principalsSnapshot.empty) {
             return res.redirect('/?message=Invalid+credentials&messageType=danger');
         }
         
-        const isPasswordValid = await bcrypt.compare(password, principal.password);
+        // Get first matching principal
+        const principalDoc = principalsSnapshot.docs[0];
+        const principalData = principalDoc.data();
+        
+        // Verify password
+        const isPasswordValid = await bcrypt.compare(password, principalData.password);
         if (!isPasswordValid) {
             return res.redirect('/?message=Invalid+credentials&messageType=danger');
         }
         
-        req.session.userId = principal._id;
+        req.session.userId = principalDoc.id;
         req.session.userType = 'principal';
         res.redirect('/principal/dashboard');
     } catch (error) {
@@ -291,30 +407,50 @@ app.post('/principal/login', async (req, res) => {
 
 app.get('/principal/dashboard', isPrincipalAuthenticated, async (req, res) => {
     try {
-        const principal = await Principal.findById(req.session.userId);
-        const teamLeaders = await TeamLeader.find({});
+        const principalRef = doc(db, 'principals', req.session.userId);
+        const principalDoc = await getDoc(principalRef);
         
-        // Prepare team leaders with student counts
-        const teamLeadersWithCounts = await Promise.all(teamLeaders.map(async (leader) => {
-            const studentCount = await Student.countDocuments({ teamLeader: leader._id });
-            return {
-                _id: leader._id,
-                name: leader.name,
-                gender: leader.gender,
-                ageUndertaken: leader.ageUndertaken,
+        if (!principalDoc.exists()) {
+            throw new Error('Principal not found');
+        }
+        
+        const principal = principalDoc.data();
+        
+        // Get all team leaders
+        const teamLeadersRef = collection(db, 'teamLeaders');
+        const teamLeadersSnapshot = await getDocs(teamLeadersRef);
+        
+        // Format team leaders with student counts
+        const teamLeadersWithCounts = [];
+        for (const docSnap of teamLeadersSnapshot.docs) {
+            const teamLeaderData = docSnap.data();
+            const studentCount = teamLeaderData.students ? teamLeaderData.students.length : 0;
+            
+            teamLeadersWithCounts.push({
+                _id: docSnap.id,
+                name: teamLeaderData.name,
+                gender: teamLeaderData.gender,
+                ageUndertaken: teamLeaderData.ageUndertaken,
                 studentCount
-            };
-        }));
+            });
+        }
+        
+        // Get counts
+        const studentsRef = collection(db, 'students');
+        const studentsSnapshot = await getDocs(studentsRef);
+        
+        const staffRef = collection(db, 'staff');
+        const staffSnapshot = await getDocs(staffRef);
         
         const counts = {
-            teamLeaders: await TeamLeader.countDocuments({}),
-            students: await Student.countDocuments({}),
-            staff: await Staff.countDocuments({})
+            teamLeaders: teamLeadersSnapshot.size,
+            students: studentsSnapshot.size,
+            staff: staffSnapshot.size
         };
         
         res.render('main', {
             title: 'Principal Dashboard',
-            user: { username: principal.username },
+            user: { username: principal.username, id: req.session.userId },
             userType: 'principal',
             active: 'dashboard',
             teamLeaders: teamLeadersWithCounts,
@@ -330,11 +466,18 @@ app.get('/principal/dashboard', isPrincipalAuthenticated, async (req, res) => {
 
 app.get('/principal/create-team', isPrincipalAuthenticated, async (req, res) => {
     try {
-        const principal = await Principal.findById(req.session.userId);
+        const principalRef = doc(db, 'principals', req.session.userId);
+        const principalDoc = await getDoc(principalRef);
+        
+        if (!principalDoc.exists()) {
+            throw new Error('Principal not found');
+        }
+        
+        const principal = principalDoc.data();
         
         res.render('main', {
             title: 'Create Team Leader',
-            user: { username: principal.username },
+            user: { username: principal.username, id: req.session.userId },
             userType: 'principal',
             active: 'create-team',
             message: req.query.message || '',
@@ -350,14 +493,14 @@ app.post('/principal/create-team', isPrincipalAuthenticated, async (req, res) =>
     try {
         const { name, gender, ageUndertaken } = req.body;
         
-        const newTeamLeader = new TeamLeader({
+        // Create new team leader
+        const teamLeadersRef = collection(db, 'teamLeaders');
+        await addDoc(teamLeadersRef, {
             name,
             gender,
             ageUndertaken: parseInt(ageUndertaken),
             students: []
         });
-        
-        await newTeamLeader.save();
         
         res.redirect('/principal/create-team?message=Team+leader+created+successfully&messageType=success');
     } catch (error) {
@@ -368,12 +511,50 @@ app.post('/principal/create-team', isPrincipalAuthenticated, async (req, res) =>
 
 app.get('/principal/view-teams', isPrincipalAuthenticated, async (req, res) => {
     try {
-        const principal = await Principal.findById(req.session.userId);
-        const teams = await TeamLeader.find({}).populate('students');
+        const principalRef = doc(db, 'principals', req.session.userId);
+        const principalDoc = await getDoc(principalRef);
+        
+        if (!principalDoc.exists()) {
+            throw new Error('Principal not found');
+        }
+        
+        const principal = principalDoc.data();
+        
+        // Get all team leaders
+        const teamLeadersRef = collection(db, 'teamLeaders');
+        const teamLeadersSnapshot = await getDocs(teamLeadersRef);
+        
+        // Format teams with student data
+        const teams = [];
+        for (const docSnap of teamLeadersSnapshot.docs) {
+            const teamLeaderData = docSnap.data();
+            const studentList = [];
+            
+            // Get students for this team
+            if (teamLeaderData.students && teamLeaderData.students.length > 0) {
+                for (const studentId of teamLeaderData.students) {
+                    const studentRef = doc(db, 'students', studentId);
+                    const studentDoc = await getDoc(studentRef);
+                    
+                    if (studentDoc.exists()) {
+                        studentList.push({
+                            id: studentDoc.id,
+                            ...studentDoc.data()
+                        });
+                    }
+                }
+            }
+            
+            teams.push({
+                id: docSnap.id,
+                ...teamLeaderData,
+                students: studentList
+            });
+        }
         
         res.render('main', {
             title: 'Manage Teams',
-            user: { username: principal.username },
+            user: { username: principal.username, id: req.session.userId },
             userType: 'principal',
             active: 'teams',
             teams,
@@ -390,22 +571,32 @@ app.post('/principal/reassign-student', isPrincipalAuthenticated, async (req, re
     try {
         const { studentId, newTeamId } = req.body;
         
-        // Get student and team info
-        const student = await Student.findById(studentId);
+        // Get student
+        const studentRef = doc(db, 'students', studentId);
+        const studentDoc = await getDoc(studentRef);
+        
+        if (!studentDoc.exists()) {
+            throw new Error('Student not found');
+        }
+        
+        const student = studentDoc.data();
         const oldTeamId = student.teamLeader;
         
         // Update student's team leader
-        student.teamLeader = newTeamId;
-        await student.save();
+        await updateDoc(studentRef, {
+            teamLeader: newTeamId
+        });
         
         // Remove student from old team
-        await TeamLeader.findByIdAndUpdate(oldTeamId, {
-            $pull: { students: studentId }
+        const oldTeamRef = doc(db, 'teamLeaders', oldTeamId);
+        await updateDoc(oldTeamRef, {
+            students: arrayRemove(studentId)
         });
         
         // Add student to new team
-        await TeamLeader.findByIdAndUpdate(newTeamId, {
-            $push: { students: studentId }
+        const newTeamRef = doc(db, 'teamLeaders', newTeamId);
+        await updateDoc(newTeamRef, {
+            students: arrayUnion(studentId)
         });
         
         res.redirect('/principal/view-teams?message=Student+reassigned+successfully&messageType=success');
@@ -418,8 +609,9 @@ app.post('/principal/reassign-student', isPrincipalAuthenticated, async (req, re
 // Export students data route
 app.get('/export-students', isPrincipalAuthenticated, async (req, res) => {
     try {
-        // Fetch all students with their team leader info
-        const students = await Student.find({}).populate('teamLeader');
+        // Fetch all students
+        const studentsRef = collection(db, 'students');
+        const studentsSnapshot = await getDocs(studentsRef);
         
         // Create a new Excel workbook and worksheet
         const workbook = new ExcelJS.Workbook();
@@ -436,16 +628,29 @@ app.get('/export-students', isPrincipalAuthenticated, async (req, res) => {
         ];
         
         // Add data rows
-        students.forEach(student => {
+        for (const docSnap of studentsSnapshot.docs) {
+            const studentData = docSnap.data();
+            let teamLeaderName = 'Not Assigned';
+            
+            // Get team leader name
+            if (studentData.teamLeader) {
+                const teamLeaderRef = doc(db, 'teamLeaders', studentData.teamLeader);
+                const teamLeaderDoc = await getDoc(teamLeaderRef);
+                
+                if (teamLeaderDoc.exists()) {
+                    teamLeaderName = teamLeaderDoc.data().name;
+                }
+            }
+            
             worksheet.addRow({
-                name: student.name,
-                age: student.age,
-                gender: student.gender,
-                phone: student.phone,
-                address: student.address,
-                teamLeader: student.teamLeader ? student.teamLeader.name : 'Not Assigned'
+                name: studentData.name,
+                age: studentData.age,
+                gender: studentData.gender,
+                phone: studentData.phone,
+                address: studentData.address,
+                teamLeader: teamLeaderName
             });
-        });
+        }
         
         // Set response headers
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
@@ -464,8 +669,9 @@ app.get('/export-students', isPrincipalAuthenticated, async (req, res) => {
 // Export teams data route
 app.get('/export-teams', isPrincipalAuthenticated, async (req, res) => {
     try {
-        // Fetch all team leaders with their students
-        const teams = await TeamLeader.find({}).populate('students').sort({ ageUndertaken: 1 });
+        // Fetch all team leaders
+        const teamLeadersRef = collection(db, 'teamLeaders');
+        const teamLeadersSnapshot = await getDocs(teamLeadersRef);
         
         // Create a new Excel workbook and worksheet
         const workbook = new ExcelJS.Workbook();
@@ -479,13 +685,29 @@ app.get('/export-teams', isPrincipalAuthenticated, async (req, res) => {
             { header: 'Total Students', key: 'studentCount', width: 20 }
         ];
         
+        // Prepare teams data
+        const teams = [];
+        for (const docSnap of teamLeadersSnapshot.docs) {
+            const teamLeaderData = docSnap.data();
+            const studentCount = teamLeaderData.students ? teamLeaderData.students.length : 0;
+            
+            teams.push({
+                id: docSnap.id,
+                ...teamLeaderData,
+                studentCount
+            });
+        }
+        
+        // Sort teams by age
+        teams.sort((a, b) => a.ageUndertaken - b.ageUndertaken);
+        
         // Add team data rows
         teams.forEach(team => {
             worksheet.addRow({
                 name: team.name,
                 ageUndertaken: team.ageUndertaken,
                 gender: team.gender,
-                studentCount: team.students.length
+                studentCount: team.studentCount
             });
         });
         
@@ -495,12 +717,12 @@ app.get('/export-teams', isPrincipalAuthenticated, async (req, res) => {
         worksheet.addRow({});
         
         // For each team, add detailed student information
-        teams.forEach(team => {
+        for (const team of teams) {
             // Add team header
             worksheet.addRow({ name: `Team: ${team.name} - Age: ${team.ageUndertaken} - Gender: ${team.gender}` });
             
             // Add student headers if the team has students
-            if (team.students.length > 0) {
+            if (team.students && team.students.length > 0) {
                 worksheet.addRow({
                     name: 'Student Name',
                     ageUndertaken: 'Age',
@@ -508,22 +730,28 @@ app.get('/export-teams', isPrincipalAuthenticated, async (req, res) => {
                     studentCount: 'Phone'
                 });
                 
-                // Add student rows
-                team.students.forEach(student => {
-                    worksheet.addRow({
-                        name: student.name,
-                        ageUndertaken: student.age,
-                        gender: student.gender,
-                        studentCount: student.phone
-                    });
-                });
+                // Get and add student rows
+                for (const studentId of team.students) {
+                    const studentRef = doc(db, 'students', studentId);
+                    const studentDoc = await getDoc(studentRef);
+                    
+                    if (studentDoc.exists()) {
+                        const studentData = studentDoc.data();
+                        worksheet.addRow({
+                            name: studentData.name,
+                            ageUndertaken: studentData.age,
+                            gender: studentData.gender,
+                            studentCount: studentData.phone
+                        });
+                    }
+                }
             } else {
                 worksheet.addRow({ name: 'No students in this team' });
             }
             
             // Add separator
             worksheet.addRow({});
-        });
+        }
         
         // Set response headers
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
