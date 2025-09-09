@@ -13,6 +13,7 @@ import '../../features/dashboards/pages/student_dashboard_page.dart';
 import '../../features/debug/pages/debug_page.dart';
 import '../../features/profile/pages/user_profile_page.dart';
 import '../constants/app_constants.dart';
+import '../theme/app_theme.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authProvider);
