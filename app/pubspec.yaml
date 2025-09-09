@@ -1,0 +1,85 @@
+name: educonnect_app
+description: EduConnect Flutter Application - Complete transformation from React web app
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI & Navigation
+  cupertino_icons: ^1.0.6
+  go_router: ^12.1.3
+  flutter_riverpod: ^2.4.9
+  
+  # HTTP & API
+  http: ^1.1.2
+  dio: ^5.4.0
+  
+  # Storage & State
+  shared_preferences: ^2.2.2
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  
+  # Authentication & Security
+  jwt_decoder: ^2.0.1
+  crypto: ^3.0.3
+  
+  # File handling
+  file_picker: ^6.1.1
+  path_provider: ^2.1.1
+  
+  # UI Components
+  flutter_svg: ^2.0.9
+  cached_network_image: ^3.3.0
+  shimmer: ^3.0.0
+  lottie: ^2.7.0
+  
+  # Charts & Visualization
+  fl_chart: ^0.65.0
+  calendar_view: ^1.0.4
+  
+  # Utilities
+  intl: ^0.19.0
+  url_launcher: ^6.2.2
+  permission_handler: ^11.1.0
+  
+  # Notifications
+  flutter_local_notifications: ^16.3.0
+  
+  # Chat & Real-time
+  socket_io_client: ^2.0.3
+  
+  # PDF & Documents
+  pdf: ^3.10.7
+  printing: ^5.11.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.1
+  hive_generator: ^2.0.1
+  build_runner: ^2.4.7
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/animations/
+  
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
