@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../features/auth/providers/auth_provider.dart';
 import '../features/common/providers/toast_provider.dart';
@@ -15,7 +14,6 @@ class EduConnectApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final router = ref.watch(routerProvider);
-    final authState = ref.watch(authProvider);
     
     return MaterialApp.router(
       title: AppConstants.appName,
